@@ -38,6 +38,9 @@ connectDB();
 const app = express();
 const httpServer = http.createServer(app);
 
+// Trust proxy for express-rate-limit behind Render
+app.set('trust proxy', 1);
+
 // ── SECURITY MIDDLEWARE ────────────────────────────────────────────
 // Security HTTP headers
 app.use(helmet({

@@ -16,7 +16,7 @@ passport.use(
         const user = await User.findOneAndUpdate(
           { googleId: profile.id },
           { $set: { lastLogin: new Date() } },
-          { new: true }
+          { returnDocument: 'after' }
         );
 
         if (user) {
