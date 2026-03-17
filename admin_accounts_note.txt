@@ -1,0 +1,20 @@
+# DANH SÁCH TÀI KHOẢN QUẢN TRỊ VIÊN (ADMIN) MẶC ĐỊNH
+---
+Hệ thống sử dụng cơ chế RBAC (Role-Based Access Control) đảm bảo an ninh. Dưới đây là 3 tài khoản cấp cao được khởi tạo sẵn bằng Bcrypt trên Server:
+
+1. CHIEF SUPER ADMIN (Chủ Sàn - Toàn Quyền)
+- Email: superadmin@hope.com
+- Password: Admin@123
+- File Logs ghi nhận mọi thao tác cấp cao nhất.
+
+2. CONTENT MODERATOR (Người Kiểm Duyệt)
+- Email: moderator@hope.com
+- Password: Admin@123
+- Quản lý duyệt Portfolio, check rác trong Tin tuyển dụng, đóng dấu Kỹ năng thực tế...
+
+3. CONFLICT SUPPORT (Người xử lý tranh chấp)
+- Email: support@hope.com
+- Password: Admin@123
+- Giám sát các khiếu nại, tin nhắn Report xấu, duy trì hòa bình trên nền tảng.
+
+Lưu ý: Mật khẩu này đã được Hash (băm) trong MongoDB. Các tài khoản này sẽ được Server bảo vệ bằng Cookie và hệ thống Rate Limiting. Nhập sai 5 lần sẽ bị cấm 15 phút.
