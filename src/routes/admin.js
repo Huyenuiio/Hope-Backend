@@ -48,6 +48,17 @@ router.get('/stats', async (req, res) => {
     const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
     const newUsersLast30 = await User.countDocuments({ createdAt: { $gte: thirtyDaysAgo } });
 
+    // Calculate growth rate (Today vs Yesterday)
+    const startOfYesterday = new Date(new Date().setHours(0, 0, 0, 0) - 24 * 60 * 60 * 1000);
+    const endOfYesterday = new Date(new Date().setHours(23, 59, 59, 999) - 24 * 60 * 60 * 1000);
+    const newUsersYesterday = await User.countDocuments({ 
+      createdAt: { $gte: startOfYesterday, $lte: endOfYesterday } 
+    });
+
+    const growthRate = newUsersYesterday === 0 
+      ? (newUsersToday > 0 ? 100 : 0) 
+      : parseFloat(((newUsersToday - newUsersYesterday) / newUsersYesterday * 100).toFixed(1));
+
     res.json({
       success: true,
       stats: {
@@ -64,6 +75,7 @@ router.get('/stats', async (req, res) => {
         flaggedJobs,
         threatsToday,
         successfulMatches,
+        growthRate
       },
     });
   } catch (err) {
@@ -72,6 +84,30 @@ router.get('/stats', async (req, res) => {
 });
 
 // ── USER MANAGEMENT ───────────────────────────────────────────────
+
+// @route   GET /api/admin/users/export
+// @desc    Export all users as CSV
+router.get('/users/export', authorize('admin', 'moderator', 'superadmin'), async (req, res) => {
+  try {
+    const users = await User.find()
+      .select('name email role isVerified isBanned createdAt lastLogin rating completedJobs')
+      .sort('-createdAt');
+
+    let csv = '\ufeffName,Email,Role,Verified,Banned,Joined Date,Last Login,Rating,Completed Jobs\n';
+    
+    users.forEach(u => {
+      const createdAt = u.createdAt ? u.createdAt.toISOString() : 'N/A';
+      const lastLogin = u.lastLogin ? u.lastLogin.toISOString() : 'Never';
+      csv += `"${u.name || ''}","${u.email || ''}","${u.role || ''}",${!!u.isVerified},${!!u.isBanned},"${createdAt}","${lastLogin}",${u.rating || 0},${u.completedJobs || 0}\n`;
+    });
+
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader('Content-Disposition', 'attachment; filename=users_export.csv');
+    res.status(200).send(csv);
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
 
 // @route   GET /api/admin/users
 router.get('/users', async (req, res) => {
@@ -102,7 +138,7 @@ router.get('/users', async (req, res) => {
 });
 
 // @route   POST /api/admin/users/:id/ban
-router.post('/users/:id/ban', authorize('admin'), async (req, res) => {
+router.post('/users/:id/ban', authorize('admin', 'moderator', 'superadmin'), async (req, res) => {
   try {
     const { banUntil, isPermanentlyBanned, reason } = req.body;
 
@@ -133,7 +169,7 @@ router.post('/users/:id/ban', authorize('admin'), async (req, res) => {
 
 // @route   DELETE /api/admin/users/:id
 // @desc    Delete user permanently
-router.delete('/users/:id', authorize('admin'), async (req, res) => {
+router.delete('/users/:id', authorize('admin', 'moderator', 'superadmin'), async (req, res) => {
   try {
     const user = await User.findById(req.params.id);
     if (!user) return res.status(404).json({ success: false, message: 'User not found' });
@@ -149,7 +185,7 @@ router.delete('/users/:id', authorize('admin'), async (req, res) => {
 
 // @route   GET /api/admin/reports
 // @desc    Get all reports
-router.get('/reports', authorize('admin'), async (req, res) => {
+router.get('/reports', authorize('admin', 'moderator', 'superadmin'), async (req, res) => {
   try {
     const reports = await Report.find()
       .populate('reporter', 'name email avatar')
@@ -164,7 +200,7 @@ router.get('/reports', authorize('admin'), async (req, res) => {
 
 // @route   PATCH /api/admin/reports/:id
 // @desc    Update report status
-router.patch('/reports/:id', authorize('admin'), async (req, res) => {
+router.patch('/reports/:id', authorize('admin', 'moderator', 'superadmin'), async (req, res) => {
   try {
     const { status, resolution } = req.body;
     const report = await Report.findByIdAndUpdate(
@@ -179,7 +215,7 @@ router.patch('/reports/:id', authorize('admin'), async (req, res) => {
 });
 
 // @route   PATCH /api/admin/users/:id/verify
-router.patch('/users/:id/verify', authorize('admin'), async (req, res) => {
+router.patch('/users/:id/verify', authorize('admin', 'moderator', 'superadmin'), async (req, res) => {
   try {
     const { badge } = req.body; // 'verified', 'top-rated', 'premium', 'none'
     const user = await User.findByIdAndUpdate(
@@ -194,7 +230,7 @@ router.patch('/users/:id/verify', authorize('admin'), async (req, res) => {
 });
 
 // @route   PATCH /api/admin/users/:id/role
-router.patch('/users/:id/role', authorize('admin'), async (req, res) => {
+router.patch('/users/:id/role', authorize('admin', 'moderator', 'superadmin'), async (req, res) => {
   try {
     const { role } = req.body;
     if (!['freelancer', 'client', 'admin', 'moderator'].includes(role)) {
@@ -320,7 +356,7 @@ router.patch('/reviews/:id/hide', async (req, res) => {
 // ── SECURITY MONITOR ─────────────────────────────────────────────
 
 // @route   GET /api/admin/security/logs
-router.get('/security/logs', authorize('admin'), async (req, res) => {
+router.get('/security/logs', authorize('admin', 'moderator', 'superadmin'), async (req, res) => {
   try {
     const { threat, ip, limit = 50, page = 1 } = req.query;
     const query = {};
@@ -357,7 +393,7 @@ router.get('/security/logs', authorize('admin'), async (req, res) => {
 });
 
 // @route   GET /api/admin/security/traffic
-router.get('/security/traffic', authorize('admin'), async (req, res) => {
+router.get('/security/traffic', authorize('admin', 'moderator', 'superadmin'), async (req, res) => {
   try {
     // Request count per hour (last 24h)
     const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);

@@ -15,8 +15,16 @@ const seedAdmins = async () => {
 
     const admins = [
       {
-        name: 'Hoài Nam (Chief Super Admin)',
-        email: 'superadmin@hope.com',
+        name: 'Tô Văn Huyền 226900',
+        email: 'huyen226900@hope.com',
+        password: hashedPassword,
+        role: 'superadmin',
+        isVerified: true,
+        verificationBadge: 'premium'
+      },
+      {
+        name: 'Nguyễn Văn Hùng 226929',
+        email: 'hung226929@hope.com',
         password: hashedPassword,
         role: 'superadmin',
         isVerified: true,
