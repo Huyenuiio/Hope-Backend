@@ -51,12 +51,12 @@ router.get('/stats', async (req, res) => {
     // Calculate growth rate (Today vs Yesterday)
     const startOfYesterday = new Date(new Date().setHours(0, 0, 0, 0) - 24 * 60 * 60 * 1000);
     const endOfYesterday = new Date(new Date().setHours(23, 59, 59, 999) - 24 * 60 * 60 * 1000);
-    const newUsersYesterday = await User.countDocuments({ 
-      createdAt: { $gte: startOfYesterday, $lte: endOfYesterday } 
+    const newUsersYesterday = await User.countDocuments({
+      createdAt: { $gte: startOfYesterday, $lte: endOfYesterday }
     });
 
-    const growthRate = newUsersYesterday === 0 
-      ? (newUsersToday > 0 ? 100 : 0) 
+    const growthRate = newUsersYesterday === 0
+      ? (newUsersToday > 0 ? 100 : 0)
       : parseFloat(((newUsersToday - newUsersYesterday) / newUsersYesterday * 100).toFixed(1));
 
     res.json({
@@ -94,7 +94,7 @@ router.get('/users/export', authorize('admin', 'moderator', 'superadmin'), async
       .sort('-createdAt');
 
     let csv = '\ufeffName,Email,Role,Verified,Banned,Joined Date,Last Login,Rating,Completed Jobs\n';
-    
+
     users.forEach(u => {
       const createdAt = u.createdAt ? u.createdAt.toISOString() : 'N/A';
       const lastLogin = u.lastLogin ? u.lastLogin.toISOString() : 'Never';
@@ -198,17 +198,43 @@ router.get('/reports', authorize('admin', 'moderator', 'superadmin'), async (req
   }
 });
 
-// @route   PATCH /api/admin/reports/:id
-// @desc    Update report status
-router.patch('/reports/:id', authorize('admin', 'moderator', 'superadmin'), async (req, res) => {
+// @route   POST /api/admin/reports/:id/resolve
+// @desc    Resolve a report with specific actions (delete job, ban user)
+router.post('/reports/:id/resolve', authorize('admin', 'moderator', 'superadmin'), async (req, res) => {
   try {
-    const { status, resolution } = req.body;
-    const report = await Report.findByIdAndUpdate(
-      req.params.id,
-      { status, resolution, resolvedBy: req.user._id },
-      { new: true }
-    );
-    res.json({ success: true, report });
+    const { action, resolution, banReason, banUntil, isPermanentlyBanned } = req.body;
+    const report = await Report.findById(req.params.id).populate('jobId accusedUser');
+    if (!report) return res.status(404).json({ success: false, message: 'Report not found' });
+
+    if (action === 'delete_job' && report.jobId) {
+      await Job.findByIdAndDelete(report.jobId._id);
+    }
+    else if (action === 'ban_user' && report.accusedUser) {
+      const userUpdate = {
+        isBanned: true,
+        banUntil: isPermanentlyBanned ? null : banUntil,
+        isPermanentlyBanned,
+        banReason: banReason || resolution
+      };
+      await User.findByIdAndUpdate(report.accusedUser._id, userUpdate);
+
+      // Also delete the job if it was reported
+      if (report.jobId) {
+        await Job.findByIdAndDelete(report.jobId._id);
+      }
+    } else if (action === 'none') {
+      // Clear flag if report is dismissed
+      if (report.jobId) {
+        await Job.findByIdAndUpdate(report.jobId._id, { isFlagged: false, flagReason: '' });
+      }
+    }
+
+    report.status = 'resolved';
+    report.resolution = resolution;
+    report.resolvedBy = req.user._id;
+    await report.save();
+
+    res.json({ success: true, message: 'Báo cáo đã được xử lý', report });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }

@@ -1,4 +1,6 @@
 const express = require('express');
+const { escapeRegExp } = require('../utils/string');
+
 const router = express.Router();
 const User = require('../models/User');
 const Portfolio = require('../models/Portfolio');
@@ -12,7 +14,7 @@ const checkBidirectionalBlock = async (userId1, userId2) => {
   if (!userId1 || !userId2) return false;
   const user1 = await User.findById(userId1).select('blockedUsers');
   const user2 = await User.findById(userId2).select('blockedUsers');
-  
+
   const id1Str = userId1.toString();
   const id2Str = userId2.toString();
 
@@ -31,7 +33,11 @@ router.get('/', optionalAuth, async (req, res) => {
       sort = '-rating', page = 1, limit = 12, search,
     } = req.query;
 
-    const query = { isActive: true, isBanned: false };
+    const query = {
+      isActive: true,
+      isBanned: false,
+      role: { $nin: ['superadmin', 'moderator', 'support'] }
+    };
 
     if (role && role !== 'all') {
       query.role = role;
@@ -64,12 +70,16 @@ router.get('/', optionalAuth, async (req, res) => {
     if (maxRate) query.hourlyRate = { ...query.hourlyRate, $lte: parseFloat(maxRate) };
     if (minRate) query.hourlyRate = { ...query.hourlyRate, $gte: parseFloat(minRate) };
     if (search) {
-      query.$or = [
-        { name: new RegExp(search, 'i') },
-        { headline: new RegExp(search, 'i') },
-        { bio: new RegExp(search, 'i') },
-        { skills: { $in: [new RegExp(search, 'i')] } },
-      ];
+      const searchWords = search.trim().split(/\s+/).filter(word => word.length > 0);
+      if (searchWords.length > 0) {
+        const searchRegexes = searchWords.map(word => new RegExp(escapeRegExp(word), 'i'));
+        query.$or = [
+          { name: { $all: searchRegexes } },
+          { headline: { $all: searchRegexes } },
+          { bio: { $all: searchRegexes } },
+          { skills: { $all: searchRegexes } },
+        ];
+      }
     }
 
     const skip = (parseInt(page) - 1) * parseInt(limit);
@@ -109,12 +119,12 @@ router.get('/:id', optionalAuth, async (req, res) => {
 
     let isBlockedByMe = false;
     let hasBlockedMe = false;
-    
+
     if (req.user) {
       // Check block status
       const currentUser = await User.findById(req.user._id).select('blockedUsers');
       const targetUser = await User.findById(user._id).select('blockedUsers');
-      
+
       const reqUserIdStr = req.user._id.toString();
       const targetUserIdStr = user._id.toString();
 
@@ -169,12 +179,12 @@ router.get('/:id', optionalAuth, async (req, res) => {
       }
     }
 
-    res.json({ 
-      success: true, 
-      user, 
-      portfolio, 
-      reviews, 
-      isBlockedByMe, 
+    res.json({
+      success: true,
+      user,
+      portfolio,
+      reviews,
+      isBlockedByMe,
       hasBlockedMe,
       canReview,
       reviewableJobs
@@ -186,7 +196,7 @@ router.get('/:id', optionalAuth, async (req, res) => {
 
 // @route   PUT /api/users/profile
 // @desc    Update own profile
-router.put('/profile', protect, async (req, res) => {
+router.put('/profile', protect, authorize('freelancer', 'client'), async (req, res) => {
   try {
     const allowedFields = [
       'name', 'headline', 'bio', 'location', 'niche', 'subNiche', 'skills', 'tools',
@@ -218,7 +228,7 @@ router.put('/profile', protect, async (req, res) => {
     }
 
     await user.save();
-    
+
     // Fetch updated user to return clean data
     const updatedUser = await User.findById(req.user._id).select('-lastLoginIP -loginCount -googleId');
 
@@ -230,7 +240,7 @@ router.put('/profile', protect, async (req, res) => {
 
 // @route   POST /api/users/:id/connect
 // @desc    Send connection request
-router.post('/:id/connect', protect, async (req, res) => {
+router.post('/:id/connect', protect, authorize('freelancer', 'client'), async (req, res) => {
   try {
     const target = await User.findById(req.params.id);
     if (!target) return res.status(404).json({ success: false, message: 'Không tìm thấy người dùng' });
@@ -275,7 +285,7 @@ router.post('/:id/connect', protect, async (req, res) => {
 
 // @route   POST /api/users/connect/:senderId/respond
 // @desc    Accept or reject connection request
-router.post('/connect/:senderId/respond', protect, async (req, res) => {
+router.post('/connect/:senderId/respond', protect, authorize('freelancer', 'client'), async (req, res) => {
   const { action } = req.body; // 'accept' or 'reject'
   try {
     const user = await User.findById(req.user._id);
@@ -328,7 +338,7 @@ router.delete('/connect/:id', protect, async (req, res) => {
 
 // @route   POST /api/users/saved-jobs/:jobId
 // @desc    Toggle saving/unsaving a job
-router.post('/saved-jobs/:jobId', protect, async (req, res) => {
+router.post('/saved-jobs/:jobId', protect, authorize('freelancer'), async (req, res) => {
   try {
     const user = await User.findById(req.user._id);
     const jobId = req.params.jobId;
@@ -362,7 +372,7 @@ router.post('/:id/block', protect, async (req, res) => {
     // Block the user and sever the connection if it exists
     await User.updateOne(
       { _id: req.user._id },
-      { 
+      {
         $addToSet: { blockedUsers: req.params.id },
         $pull: { connections: req.params.id, connectionRequests: { from: req.params.id } }
       }
@@ -372,7 +382,7 @@ router.post('/:id/block', protect, async (req, res) => {
     await User.updateOne(
       { _id: req.params.id },
       {
-         $pull: { connections: req.user._id, connectionRequests: { from: req.user._id } }
+        $pull: { connections: req.user._id, connectionRequests: { from: req.user._id } }
       }
     );
 

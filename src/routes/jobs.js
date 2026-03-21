@@ -1,4 +1,6 @@
 const express = require('express');
+const { escapeRegExp } = require('../utils/string');
+
 const router = express.Router();
 const Job = require('../models/Job');
 const User = require('../models/User');
@@ -31,6 +33,7 @@ router.get('/', optionalAuth, async (req, res) => {
       search, niche, skills, budgetMin, budgetMax, budgetType,
       workType, duration, englishRequired, sort = '-createdAt',
       page = 1, limit = 10, status = 'open',
+      appliedOnly, savedOnly
     } = req.query;
 
     const query = { isApproved: true, status };
@@ -56,14 +59,30 @@ router.get('/', optionalAuth, async (req, res) => {
     if (duration) query.duration = duration;
     if (englishRequired) query.englishRequired = englishRequired;
     if (budgetType) query['budget.type'] = budgetType;
-    if (budgetMin) query['budget.min'] = { $gte: parseFloat(budgetMin) };
     if (budgetMax) query['budget.max'] = { $lte: parseFloat(budgetMax) };
+
+    // New Role-specific filters
+    if (req.user) {
+      if (appliedOnly === 'true') {
+        const applications = await Application.find({ freelancer: req.user._id }).select('job');
+        const appliedJobIds = applications.map(a => a.job);
+        query._id = { ...query._id, $in: appliedJobIds };
+      }
+      if (savedOnly === 'true') {
+        const user = await User.findById(req.user._id).select('savedJobs');
+        query._id = { ...query._id, $in: user.savedJobs || [] };
+      }
+    }
     if (search) {
-      query.$or = [
-        { title: new RegExp(search, 'i') },
-        { description: new RegExp(search, 'i') },
-        { tags: { $in: [new RegExp(search, 'i')] } },
-      ];
+      const searchWords = search.trim().split(/\s+/).filter(word => word.length > 0);
+      if (searchWords.length > 0) {
+        const searchRegexes = searchWords.map(word => new RegExp(escapeRegExp(word), 'i'));
+        query.$or = [
+          { title: { $all: searchRegexes } },
+          { description: { $all: searchRegexes } },
+          { tags: { $all: searchRegexes } },
+        ];
+      }
     }
 
     const skip = (parseInt(page) - 1) * parseInt(limit);
@@ -94,10 +113,10 @@ router.get('/', optionalAuth, async (req, res) => {
     // Enhance jobs with user-specific data (hasApplied, isSaved) and filter comments
     let enhancedJobs = enhancedJobsWithCounts;
     if (req.user) {
-      const user = await req.user.populate('savedJobs'); // ensure we have the array
+      const fullUser = await User.findById(req.user._id).select('savedJobs');
       const appliedJobs = await Application.find({ freelancer: req.user._id }).select('job');
       const appliedJobIds = appliedJobs.map(a => a.job.toString());
-      const savedJobIds = (user.savedJobs || []).map(id => id.toString());
+      const savedJobIds = (fullUser?.savedJobs || []).map(id => id.toString());
 
       enhancedJobs = enhancedJobs.map(job => {
         // Add block flag to comments and replies from restricted users
@@ -1141,6 +1160,47 @@ router.post('/:id/send', protect, async (req, res) => {
     await req.user.save();
 
     res.json({ success: true, sendCount: job.sends.length });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// @route   POST /api/jobs/:id/report
+router.post('/:id/report', protect, async (req, res) => {
+  try {
+    const { reason, description } = req.body;
+    const job = await Job.findById(req.params.id);
+    if (!job) return res.status(404).json({ success: false, message: 'Job not found' });
+
+    // Prevent duplicate reports
+    const existingReport = await Report.findOne({
+      reporter: req.user._id,
+      jobId: job._id,
+      status: 'pending'
+    });
+    if (existingReport) {
+      return res.status(400).json({ success: false, message: 'Bạn đã báo cáo công việc này rồi. Quản trị viên đang xem xét.' });
+    }
+
+    const report = await Report.create({
+      reporter: req.user._id,
+      accusedUser: job.client,
+      type: 'job',
+      jobId: job._id,
+      reason: `${reason}: ${description}`,
+      contentPreview: job.title,
+      status: 'pending'
+    });
+
+    // Also flag the job in the Job model for immediate visibility
+    job.isFlagged = true;
+    job.flagReason = reason;
+    await job.save();
+
+    // Notify admins (optional, but good for UX)
+    // In a real app we might send an email or socket event here.
+
+    res.json({ success: true, message: 'Báo cáo đã được gửi tới quản trị viên', report });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }
