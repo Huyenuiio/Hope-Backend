@@ -133,6 +133,44 @@ module.exports = (httpServer) => {
       }
     });
 
+    // ── VIDEO CALL SIGNALING ──────────────────────────
+
+    socket.on('call:initiate', (data) => {
+      const { receiverId, streamId, callerName, callerAvatar, signal } = data;
+      const receiverSocketId = onlineUsers.get(receiverId);
+
+      if (receiverSocketId) {
+        io.to(receiverSocketId).emit('call:incoming', {
+          callerId: userId,
+          callerName: callerName || socket.user.name,
+          callerAvatar: callerAvatar || socket.user.avatar,
+          streamId,
+          signal
+        });
+      }
+    });
+
+    socket.on('call:respond', ({ callerId, accepted }) => {
+      const callerSocketId = onlineUsers.get(callerId);
+      if (callerSocketId) {
+        io.to(callerSocketId).emit('call:answered', { accepted, receiverId: userId });
+      }
+    });
+
+    socket.on('webrtc:signal', ({ targetId, signal }) => {
+      const targetSocketId = onlineUsers.get(targetId);
+      if (targetSocketId) {
+        io.to(targetSocketId).emit('webrtc:signal', { senderId: userId, signal });
+      }
+    });
+
+    socket.on('call:end', ({ targetId }) => {
+      const targetSocketId = onlineUsers.get(targetId);
+      if (targetSocketId) {
+        io.to(targetSocketId).emit('call:ended', { fromId: userId });
+      }
+    });
+
     // ── DISCONNECT ──────────────────────────────────────
 
     socket.on('disconnect', () => {
