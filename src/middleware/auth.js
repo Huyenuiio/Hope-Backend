@@ -1,5 +1,6 @@
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
+const redisClient = require('../config/redis');
 
 // Middleware: verify JWT token from Authorization header or cookie
 exports.protect = async (req, res, next) => {
@@ -18,6 +19,18 @@ exports.protect = async (req, res, next) => {
     return res.status(401).json({ success: false, message: 'Vui lòng đăng nhập để tiếp tục' });
   }
 
+  // 1. Kiểm tra JWT Blacklist trên Redis
+  if (redisClient) {
+    try {
+      const isBlacklisted = await redisClient.get(`bl_${token}`);
+      if (isBlacklisted) {
+        return res.status(401).json({ success: false, message: 'Phiên đăng nhập đã hết hạn hoặc bị đăng xuất' });
+      }
+    } catch (e) {
+      console.error('Redis Blacklist check error:', e);
+    }
+  }
+
   try {
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
     const user = await User.findById(decoded.id).select('-lastLoginIP');
@@ -31,6 +44,7 @@ exports.protect = async (req, res, next) => {
     }
 
     req.user = user;
+    req.token = token; // Lưu lại token gốc để dùng cho /logout (Thêm vào Blacklist)
     next();
   } catch (err) {
     return res.status(401).json({ success: false, message: 'Token không hợp lệ hoặc đã hết hạn' });
@@ -51,9 +65,20 @@ exports.optionalAuth = async (req, res, next) => {
     return next();
   }
 
+  if (redisClient) {
+    try {
+      const isBlacklisted = await redisClient.get(`bl_${token}`);
+      if (isBlacklisted) {
+        req.user = null;
+        return next();
+      }
+    } catch (e) {}
+  }
+
   try {
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
     req.user = await User.findById(decoded.id).select('-lastLoginIP');
+    req.token = token; // Lưu lại để dùng nếu cần
   } catch {
     req.user = null;
   }

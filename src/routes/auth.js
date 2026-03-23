@@ -7,6 +7,8 @@ const User = require('../models/User');
 const { sendTokenResponse, generateToken } = require('../utils/jwt');
 const { protect } = require('../middleware/auth');
 const { authLimiter } = require('../middleware/rateLimit');
+const redisClient = require('../config/redis');
+const jwt = require('jsonwebtoken');
 
 // Rate Limiter cho đăng nhập cục bộ (Chống Brute-force)
 const loginLimiter = rateLimit({
@@ -98,8 +100,23 @@ router.get('/me', protect, async (req, res) => {
 });
 
 // @route   POST /api/auth/logout
-// @desc    Logout (clear cookie)
-router.post('/logout', protect, (req, res) => {
+// @desc    Logout (clear cookie) & Blacklist Token
+router.post('/logout', protect, async (req, res) => {
+  if (req.token && redisClient) {
+    try {
+      const decoded = jwt.decode(req.token); // Protect middleware has already verified this
+      if (decoded && decoded.exp) {
+        const expiresIn = decoded.exp - Math.floor(Date.now() / 1000);
+        if (expiresIn > 0) {
+          await redisClient.setex(`bl_${req.token}`, expiresIn, 'true');
+          console.log(`🔒 [JWT Blacklist] Token added for User ${req.user._id}. Expires in ${expiresIn}s.`);
+        }
+      }
+    } catch (e) {
+      console.error('Logout Blacklist Error:', e);
+    }
+  }
+
   res.cookie('token', '', { expires: new Date(0), httpOnly: true });
   res.json({ success: true, message: 'Đã đăng xuất thành công' });
 });

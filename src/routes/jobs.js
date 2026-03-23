@@ -10,6 +10,7 @@ const Report = require('../models/Report');
 const { protect, optionalAuth } = require('../middleware/auth');
 const { authorize } = require('../middleware/roles');
 const { getRecommendedJobs } = require('../utils/matching');
+const { cacheMiddleware, clearCachePattern } = require('../middleware/cache');
 
 // Helper for bidirectional block check
 const checkBidirectionalBlock = async (userId1, userId2) => {
@@ -27,7 +28,7 @@ const checkBidirectionalBlock = async (userId1, userId2) => {
 
 // @route   GET /api/jobs
 // @desc    Get jobs with search and filters
-router.get('/', optionalAuth, async (req, res) => {
+router.get('/', optionalAuth, cacheMiddleware(300, 'jobs:feed'), async (req, res) => {
   try {
     const {
       search, niche, skills, budgetMin, budgetMax, budgetType,
@@ -158,7 +159,7 @@ router.get('/', optionalAuth, async (req, res) => {
 
 // @route   GET /api/jobs/insights/market
 // @desc    Get real-time market insights based on job data
-router.get('/insights/market', protect, async (req, res) => {
+router.get('/insights/market', protect, cacheMiddleware(1800, 'jobs:insights'), async (req, res) => {
   try {
     // 1. Get Top Skills (Aggregate Niche & RequiredSkills)
     const topSkills = await Job.aggregate([
@@ -209,7 +210,7 @@ router.get('/insights/market', protect, async (req, res) => {
 
 // @route   GET /api/jobs/recommended
 // @desc    Get recommended jobs for current freelancer
-router.get('/recommended', protect, async (req, res) => {
+router.get('/recommended', protect, cacheMiddleware(300, 'jobs:recommended'), async (req, res) => {
   try {
     let results = await getRecommendedJobs(req.user._id, 20);
 
@@ -361,6 +362,8 @@ router.post('/', protect, authorize('client'), async (req, res) => {
       ? 'Tin tuyển dụng đang chờ duyệt do phát hiện từ ngữ cần kiểm tra'
       : 'Tin tuyển dụng đang chờ duyệt từ admin';
 
+    await clearCachePattern('cache:jobs:*');
+
     res.status(201).json({ success: true, message, job });
   } catch (err) {
     res.status(400).json({ success: false, message: err.message });
@@ -385,6 +388,9 @@ router.put('/:id', protect, async (req, res) => {
     allowedUpdates.forEach((f) => { if (req.body[f] !== undefined) updates[f] = req.body[f]; });
 
     job = await Job.findByIdAndUpdate(req.params.id, updates, { new: true, runValidators: true });
+
+    await clearCachePattern('cache:jobs:*');
+
     res.json({ success: true, job });
   } catch (err) {
     res.status(400).json({ success: false, message: err.message });
@@ -403,6 +409,8 @@ router.delete('/:id', protect, async (req, res) => {
     }
 
     await Job.findByIdAndDelete(req.params.id);
+    await clearCachePattern('cache:jobs:*');
+
     res.json({ success: true, message: 'Đã xóa công việc' });
   } catch (err) {
     res.status(400).json({ success: false, message: err.message });

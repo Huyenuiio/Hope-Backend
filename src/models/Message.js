@@ -6,7 +6,7 @@ const MessageSchema = new mongoose.Schema(
     sender: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
     receiver: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
     content: { type: String, required: true, maxlength: 5000 },
-    type: { type: String, enum: ['text', 'image', 'file', 'job-offer', 'meeting-invite', 'job-share'], default: 'text' },
+    type: { type: String, enum: ['text', 'image', 'file', 'job-offer', 'meeting-invite', 'job-share', 'video_call'], default: 'text' },
     attachment: {
       url: String,
       name: String,

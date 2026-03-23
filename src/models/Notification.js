@@ -11,7 +11,7 @@ const NotificationSchema = new mongoose.Schema(
         'new_job_match', 'portfolio_approved', 'portfolio_rejected',
         'new_review', 'meeting_request', 'meeting_confirmed', 'meeting_cancelled',
         'connection_request', 'connection_accepted',
-        'job_hired', 'job_closed', 'system',
+        'job_hired', 'job_closed', 'system', 'video_call',
         'job_reaction', 'job_comment', 'comment_reaction', 'comment_reply', 'reply_reaction'
       ],
       required: true,

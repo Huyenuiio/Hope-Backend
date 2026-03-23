@@ -8,6 +8,7 @@ const Review = require('../models/Review');
 const Job = require('../models/Job');
 const { protect, optionalAuth } = require('../middleware/auth');
 const { authorize } = require('../middleware/roles');
+const { cacheMiddleware, clearCachePattern } = require('../middleware/cache');
 
 // Helper for bidirectional block check
 const checkBidirectionalBlock = async (userId1, userId2) => {
@@ -25,7 +26,7 @@ const checkBidirectionalBlock = async (userId1, userId2) => {
 
 // @route   GET /api/users
 // @desc    Get all freelancers with filters
-router.get('/', optionalAuth, async (req, res) => {
+router.get('/', optionalAuth, cacheMiddleware(300, 'users:list'), async (req, res) => {
   try {
     const {
       role, niche, skills, tools, minRating,
@@ -107,7 +108,7 @@ router.get('/', optionalAuth, async (req, res) => {
 
 // @route   GET /api/users/:id
 // @desc    Get single user profile
-router.get('/:id', optionalAuth, async (req, res) => {
+router.get('/:id', optionalAuth, cacheMiddleware(300, 'users:profile'), async (req, res) => {
   try {
     const user = await User.findById(req.params.id)
       .select('-lastLoginIP -loginCount -googleId')
@@ -231,6 +232,8 @@ router.put('/profile', protect, authorize('freelancer', 'client'), async (req, r
 
     // Fetch updated user to return clean data
     const updatedUser = await User.findById(req.user._id).select('-lastLoginIP -loginCount -googleId');
+
+    await clearCachePattern('cache:users:*');
 
     res.json({ success: true, user: updatedUser });
   } catch (err) {
