@@ -5,13 +5,20 @@ const { protect } = require('../middleware/auth');
 
 // @desc    Get TURN server credentials
 // @route   GET /api/webrtc/turn-credentials
-// @access  Private
-router.get('/turn-credentials', protect, async (req, res) => {
+// @access  Public (Temporarily for debugging logout issue)
+router.get('/turn-credentials', async (req, res) => {
   try {
     const domain = process.env.METERED_DOMAIN;
     const apiKey = process.env.METERED_SECRET_KEY;
 
+    console.log('[WebRTC] Request received. Config:', {
+      hasDomain: !!domain,
+      hasApiKey: !!apiKey,
+      domain: domain
+    });
+
     if (!domain || !apiKey) {
+      console.error('[WebRTC] Missing Metered credentials in ENV');
       return res.status(500).json({
         success: false,
         message: 'Metered credentials not configured on server'
