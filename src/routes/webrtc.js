@@ -30,9 +30,11 @@ router.get('/turn-credentials', async (req, res) => {
     if (!response.ok) {
       const errorData = await response.text();
       console.error('[WebRTC] Metered API Error:', response.status, errorData);
-      return res.status(response.status).json({
+      // We return 500 here instead of response.status (which might be 401)
+      // to avoid triggering the global logout interceptor on the frontend.
+      return res.status(500).json({
         success: false,
-        message: `Metered API error: ${response.status}`
+        message: `Metered API configuration error: ${response.status}`
       });
     }
 
