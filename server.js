@@ -28,6 +28,8 @@ const portfolioRoutes = require('./src/routes/portfolio');
 const reviewRoutes = require('./src/routes/reviews');
 const meetingRoutes = require('./src/routes/meetings');
 const adminRoutes = require('./src/routes/admin');
+const webrtcRoutes = require('./src/routes/webrtc');
+const notificationRoutes = require('./src/routes/notifications');
 
 
 // Socket
