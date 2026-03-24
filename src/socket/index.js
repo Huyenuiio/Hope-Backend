@@ -163,6 +163,12 @@ module.exports = (httpServer) => {
           type: 'video_call',
         });
 
+        // Populate so frontend has name/avatar for the "Người dùng" fallback
+        await message.populate([
+          { path: 'sender', select: 'name avatar' },
+          { path: 'receiver', select: 'name avatar' },
+        ]);
+
         // Notify both if online
         [callerId, receiverId].forEach(id => {
           const sId = onlineUsers.get(id.toString());
