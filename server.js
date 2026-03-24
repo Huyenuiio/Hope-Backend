@@ -29,7 +29,6 @@ const reviewRoutes = require('./src/routes/reviews');
 const meetingRoutes = require('./src/routes/meetings');
 const adminRoutes = require('./src/routes/admin');
 const webrtcRoutes = require('./src/routes/webrtc');
-const notificationRoutes = require('./src/routes/notifications');
 
 
 // Socket
@@ -152,6 +151,7 @@ app.use('/api/portfolio', portfolioRoutes);
 app.use('/api/reviews', reviewRoutes);
 app.use('/api/meetings', meetingRoutes);
 app.use('/api/admin', adminRoutes);
+app.use('/api/webrtc', webrtcRoutes);
 
 
 // ── 404 & ERROR HANDLERS ───────────────────────────────────────────
