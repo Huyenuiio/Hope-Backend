@@ -124,11 +124,14 @@ JobSchema.pre('save', function () {
   }
 });
 
-JobSchema.index({ status: 1, isApproved: 1 });
-JobSchema.index({ niche: 1 });
-JobSchema.index({ requiredSkills: 1 });
-JobSchema.index({ client: 1 });
+JobSchema.index({ status: 1, isApproved: 1, createdAt: -1 });
+JobSchema.index({ niche: 1, status: 1, createdAt: -1 });
+JobSchema.index({ requiredSkills: 1, status: 1, createdAt: -1 });
+JobSchema.index({ client: 1, createdAt: -1 });
 JobSchema.index({ createdAt: -1 });
 JobSchema.index({ 'budget.min': 1, 'budget.max': 1 });
+
+// Text Index for full-text search
+JobSchema.index({ title: 'text', description: 'text', tags: 'text' }, { weights: { title: 10, tags: 5, description: 1 } });
 
 module.exports = mongoose.model('Job', JobSchema);

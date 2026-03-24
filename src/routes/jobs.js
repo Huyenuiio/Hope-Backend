@@ -11,6 +11,7 @@ const { protect, optionalAuth } = require('../middleware/auth');
 const { authorize } = require('../middleware/roles');
 const { getRecommendedJobs } = require('../utils/matching');
 const { cacheMiddleware, clearCachePattern } = require('../middleware/cache');
+const { uploadToImgBB } = require('../utils/image');
 
 // Helper for bidirectional block check
 const checkBidirectionalBlock = async (userId1, userId2) => {
@@ -269,7 +270,7 @@ router.get('/my-jobs', protect, authorize('client'), async (req, res) => {
   try {
     const jobs = await Job.find({ client: req.user._id })
       .sort('-createdAt')
-      .populate('hiredFreelancer', 'name avatar');
+      .populate('hiredFreelancer', 'name');
     res.json({ success: true, jobs });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
@@ -473,7 +474,7 @@ router.get('/:id/applications', protect, authorize('client', 'admin', 'moderator
     const applications = await Application.find({ job: req.params.id, isWithdrawn: false })
       .populate({
         path: 'freelancer',
-        select: 'name avatar headline niche skills tools rating completedJobs hourlyRate',
+        select: 'name headline niche skills tools rating completedJobs hourlyRate',
       })
       .populate('portfolioItems', 'title thumbnailUrl mediaUrl')
       .sort({ status: 1, createdAt: -1 });
@@ -675,7 +676,14 @@ router.post('/:id/comment', protect, authorize('freelancer', 'client'), async (r
       return res.status(403).json({ success: false, message: 'Không thể bình luận trên bài đăng này do cài đặt chặn' });
     }
 
-    const { text, image, mentionUserId, mentionUserName } = req.body;
+    const { text, mentionUserId, mentionUserName } = req.body;
+    let { image } = req.body;
+
+    // Auto-upload comment image if it's base64
+    if (image && image.startsWith('data:image')) {
+      image = await uploadToImgBB(image);
+    }
+
     const newComment = {
       user: req.user._id,
       text,
@@ -744,78 +752,12 @@ router.put('/:id/comment/:commentId', protect, async (req, res) => {
     }
 
     if (req.body.text) comment.text = req.body.text;
-    if (req.body.image !== undefined) comment.image = req.body.image;
+    if (req.body.image !== undefined) {
+      comment.image = await uploadToImgBB(req.body.image);
+    }
 
     await job.save();
     res.json({ success: true, comment });
-  } catch (err) {
-    res.status(500).json({ success: false, message: err.message });
-  }
-});
-
-// @route   DELETE /api/jobs/:id/comment/:commentId
-// @desc    Delete a comment
-router.delete('/:id/comment/:commentId', protect, async (req, res) => {
-  try {
-    const job = await Job.findById(req.params.id);
-    if (!job) return res.status(404).json({ success: false, message: 'Job not found' });
-
-    const comment = job.comments.id(req.params.commentId);
-    if (!comment) return res.status(404).json({ success: false, message: 'Comment not found' });
-
-    if (comment.user.toString() !== req.user._id.toString() && req.user.role !== 'admin') {
-      return res.status(403).json({ success: false, message: 'Unauthorized' });
-    }
-
-    job.comments.pull({ _id: req.params.commentId });
-    await job.save();
-    res.json({ success: true, message: 'Bình luận đã được xóa' });
-  } catch (err) {
-    res.status(500).json({ success: false, message: err.message });
-  }
-});
-
-// @route   PUT /api/jobs/:id/comment/:commentId
-// @desc    Update a comment
-router.put('/:id/comment/:commentId', protect, async (req, res) => {
-  try {
-    const job = await Job.findById(req.params.id);
-    if (!job) return res.status(404).json({ success: false, message: 'Job not found' });
-
-    const comment = job.comments.id(req.params.commentId);
-    if (!comment) return res.status(404).json({ success: false, message: 'Comment not found' });
-
-    if (comment.user.toString() !== req.user._id.toString() && req.user.role !== 'admin') {
-      return res.status(403).json({ success: false, message: 'Unauthorized' });
-    }
-
-    if (req.body.text) comment.text = req.body.text;
-    if (req.body.image !== undefined) comment.image = req.body.image;
-
-    await job.save();
-    res.json({ success: true, comment });
-  } catch (err) {
-    res.status(500).json({ success: false, message: err.message });
-  }
-});
-
-// @route   DELETE /api/jobs/:id/comment/:commentId
-// @desc    Delete a comment
-router.delete('/:id/comment/:commentId', protect, async (req, res) => {
-  try {
-    const job = await Job.findById(req.params.id);
-    if (!job) return res.status(404).json({ success: false, message: 'Job not found' });
-
-    const comment = job.comments.id(req.params.commentId);
-    if (!comment) return res.status(404).json({ success: false, message: 'Comment not found' });
-
-    if (comment.user.toString() !== req.user._id.toString() && req.user.role !== 'admin') {
-      return res.status(403).json({ success: false, message: 'Unauthorized' });
-    }
-
-    job.comments.pull({ _id: req.params.commentId });
-    await job.save();
-    res.json({ success: true, message: 'Bình luận đã được xóa' });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }
@@ -912,7 +854,14 @@ router.post('/:id/comment/:commentId/reply', protect, async (req, res) => {
       return res.status(403).json({ success: false, message: 'Không thể phản hồi do cài đặt chặn' });
     }
 
-    const { text, image, mentionUserId, mentionUserName } = req.body;
+    const { text, mentionUserId, mentionUserName } = req.body;
+    let { image } = req.body;
+
+    // Auto-upload reply image if it's base64
+    if (image && image.startsWith('data:image')) {
+      image = await uploadToImgBB(image);
+    }
+
     const newReply = {
       user: req.user._id,
       text,
@@ -1000,7 +949,9 @@ router.put('/:id/comment/:commentId/reply/:replyId', protect, async (req, res) =
     }
 
     if (req.body.text) reply.text = req.body.text;
-    if (req.body.image !== undefined) reply.image = req.body.image;
+    if (req.body.image !== undefined) {
+      reply.image = await uploadToImgBB(req.body.image);
+    }
 
     await job.save();
     res.json({ success: true, reply });

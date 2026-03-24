@@ -8,6 +8,7 @@ const rateLimit = require('express-rate-limit');
 const morgan = require('morgan');
 const cookieParser = require('cookie-parser');
 const session = require('express-session');
+const compression = require('compression');
 
 // Config
 const connectDB = require('./src/config/db');
@@ -37,6 +38,9 @@ connectDB();
 
 const app = express();
 const httpServer = http.createServer(app);
+
+// Compress all responses
+app.use(compression());
 
 // Trust proxy for express-rate-limit behind Render
 app.set('trust proxy', 1);

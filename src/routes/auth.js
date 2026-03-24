@@ -91,7 +91,7 @@ router.post('/login', loginLimiter, async (req, res) => {
 router.get('/me', protect, async (req, res) => {
   try {
     const user = await User.findById(req.user._id)
-      .select('-lastLoginIP -loginCount')
+      .select('-lastLoginIP -loginCount -socialHistory -caseStudies')
       .populate('connections', 'name avatar headline');
     res.json({ success: true, user });
   } catch (err) {

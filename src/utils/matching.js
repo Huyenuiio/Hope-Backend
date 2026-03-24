@@ -113,6 +113,8 @@ exports.getRecommendedJobs = async (freelancerId, limit = 10) => {
   // Data Quality check: If user has no niche, we can't recommend well
   if (!freelancer.niche || freelancer.niche.length === 0) return [];
 
+  // 1. Fetch Candidate Pool (Up to 200 newest jobs in the same industry)
+  // We fetch minimal data first to save memory on free tiers
   const jobs = await Job.find({
     status: 'open',
     isApproved: true,
@@ -120,21 +122,30 @@ exports.getRecommendedJobs = async (freelancerId, limit = 10) => {
     niche: { $in: freelancer.niche },
     client: { $nin: freelancer.blockedUsers || [] }
   })
-    .populate('client', 'name avatar company rating')
-    .populate({ path: 'comments.user', select: 'name avatar' })
-    .populate({ path: 'comments.replies.user', select: 'name avatar' })
+    .select('title description niche subNiche requiredSkills requiredTools englishRequired expertiseLevel budget client createdAt')
     .sort({ createdAt: -1 })
-    .limit(limit * 5); // Fetch more to allow precision scoring
+    .limit(200); // Analyzing the top 200 most recent industry matches
 
-  // Score and filter
+  // 2. Score and Filter in Node.js
   const scored = jobs
     .map((job) => ({
       job,
       score: scoreFreelancer(freelancer, job),
     }))
-    .filter((j) => j.score >= 25) // Higher threshold for quality
+    .filter((j) => j.score >= 25) // Accuracy threshold
     .sort((a, b) => b.score - a.score)
     .slice(0, limit);
 
-  return scored;
+  // 3. Final Population (Only for the TOP matches to save resources)
+  const finalResults = await Promise.all(
+    scored.map(async (item) => {
+      const fullJob = await Job.findById(item.job._id)
+        .populate('client', 'name avatar company rating')
+        .populate({ path: 'comments.user', select: 'name avatar' })
+        .populate({ path: 'comments.replies.user', select: 'name avatar' });
+      return { ...item, job: fullJob };
+    })
+  );
+
+  return finalResults;
 };

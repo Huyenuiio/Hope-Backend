@@ -162,11 +162,10 @@ UserSchema.virtual('profileUrl').get(function () {
 });
 
 // Index for search performance (email & googleId đã có unique index từ field definition)
-UserSchema.index({ role: 1, isActive: 1 });
+UserSchema.index({ role: 1, isActive: 1, rating: -1 });
+UserSchema.index({ role: 1, niche: 1, isActive: 1, rating: -1 });
+UserSchema.index({ role: 1, skills: 1, isActive: 1, rating: -1 });
 UserSchema.index({ name: 1 });
-UserSchema.index({ headline: 1 });
-UserSchema.index({ niche: 1 });
-UserSchema.index({ skills: 1 });
 UserSchema.index({ rating: -1 });
 
 

@@ -9,6 +9,7 @@ const Job = require('../models/Job');
 const { protect, optionalAuth } = require('../middleware/auth');
 const { authorize } = require('../middleware/roles');
 const { cacheMiddleware, clearCachePattern } = require('../middleware/cache');
+const { uploadToImgBB } = require('../utils/image');
 
 // Helper for bidirectional block check
 const checkBidirectionalBlock = async (userId1, userId2) => {
@@ -211,6 +212,11 @@ router.put('/profile', protect, authorize('freelancer', 'client'), async (req, r
 
     const user = await User.findById(req.user._id);
     if (!user) return res.status(404).json({ success: false, message: 'User not found' });
+
+    // Auto-upload avatar if it's base64
+    if (req.body.avatar && req.body.avatar.startsWith('data:image')) {
+      req.body.avatar = await uploadToImgBB(req.body.avatar);
+    }
 
     allowedFields.forEach((field) => {
       // Explicitly overwrite the field if it's provided in the payload
