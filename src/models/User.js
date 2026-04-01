@@ -24,7 +24,6 @@ const UserSchema = new mongoose.Schema(
     verificationBadge: { type: String, enum: ['none', 'verified', 'top-rated', 'premium'], default: 'none' },
     isActive: { type: Boolean, default: true },
     isBanned: { type: Boolean, default: false },
-    banReason: { type: String },
 
     // ── Freelancer Fields ──────────────────────────────
     niche: [{ type: String }],

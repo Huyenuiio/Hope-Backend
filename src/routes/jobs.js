@@ -459,6 +459,9 @@ router.post('/:id/apply', protect, authorize('freelancer'), async (req, res) => 
       applicationRef: application._id,
     });
 
+    // Clear cache to reflect "Applied" status in feed
+    await clearCachePattern('cache:jobs:*');
+
     res.status(201).json({ success: true, message: 'Đã nộp đơn thành công', application });
   } catch (err) {
     res.status(400).json({ success: false, message: err.message });
@@ -531,6 +534,7 @@ router.put('/:id/applications/:appId/accept', protect, authorize('client'), asyn
       io.pushNotificationToUser(application.freelancer.toString(), newNotif);
     }
 
+    await clearCachePattern('cache:jobs:*');
     res.json({ success: true, message: 'Đã chấp nhận ứng viên', application });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
@@ -574,6 +578,7 @@ router.put('/:id/applications/:appId/reject', protect, authorize('client'), asyn
       io.pushNotificationToUser(application.freelancer.toString(), newNotif);
     }
 
+    await clearCachePattern('cache:jobs:*');
     res.json({ success: true, message: 'Đã từ chối ứng viên', application });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
@@ -657,6 +662,7 @@ router.post('/:id/react', protect, authorize('freelancer', 'client'), async (req
       return acc;
     }, {});
 
+    await clearCachePattern('cache:jobs:*');
     res.json({
       success: true,
       userReaction: reactionIndex > -1 && oldReaction === type ? null : type,
@@ -736,6 +742,7 @@ router.post('/:id/comment', protect, authorize('freelancer', 'client'), async (r
     });
     await req.user.save();
 
+    await clearCachePattern('cache:jobs:*');
     res.json({ success: true, comment: job.comments[job.comments.length - 1] });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
@@ -762,7 +769,31 @@ router.put('/:id/comment/:commentId', protect, async (req, res) => {
     }
 
     await job.save();
+    await clearCachePattern('cache:jobs:*');
     res.json({ success: true, comment });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// @route   DELETE /api/jobs/:id/comment/:commentId
+// @desc    Delete a comment
+router.delete('/:id/comment/:commentId', protect, async (req, res) => {
+  try {
+    const job = await Job.findById(req.params.id);
+    if (!job) return res.status(404).json({ success: false, message: 'Job not found' });
+
+    const comment = job.comments.id(req.params.commentId);
+    if (!comment) return res.status(404).json({ success: false, message: 'Comment not found' });
+
+    if (comment.user.toString() !== req.user._id.toString() && req.user.role !== 'admin') {
+      return res.status(403).json({ success: false, message: 'Unauthorized' });
+    }
+
+    job.comments.pull({ _id: req.params.commentId });
+    await job.save();
+    await clearCachePattern('cache:jobs:*');
+    res.json({ success: true, message: 'Bình luận đã được xóa' });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }
@@ -836,6 +867,7 @@ router.post('/:id/comment/:commentId/react', protect, async (req, res) => {
     }
 
     await job.save();
+    await clearCachePattern('cache:jobs:*');
     res.json({ success: true, reactions: comment.reactions });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
@@ -933,6 +965,7 @@ router.post('/:id/comment/:commentId/reply', protect, async (req, res) => {
     });
     await req.user.save();
 
+    await clearCachePattern('cache:jobs:*');
     res.json({ success: true, reply: comment.replies[comment.replies.length - 1] });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
@@ -959,6 +992,7 @@ router.put('/:id/comment/:commentId/reply/:replyId', protect, async (req, res) =
     }
 
     await job.save();
+    await clearCachePattern('cache:jobs:*');
     res.json({ success: true, reply });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
@@ -981,6 +1015,7 @@ router.delete('/:id/comment/:commentId/reply/:replyId', protect, async (req, res
 
     comment.replies.pull({ _id: req.params.replyId });
     await job.save();
+    await clearCachePattern('cache:jobs:*');
     res.json({ success: true, message: 'Phản hồi đã được xóa' });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
@@ -1077,6 +1112,7 @@ router.post('/:id/comment/:commentId/reply/:replyId/react', protect, async (req,
     }
 
     await job.save();
+    await clearCachePattern('cache:jobs:*');
     res.json({ success: true, reactions: reply.reactions });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });

@@ -21,7 +21,7 @@ router.get('/:userId', optionalAuth, async (req, res) => {
       .limit(20);
 
     const stats = await Review.aggregate([
-      { $match: { reviewee: require('mongoose').Types.ObjectId(req.params.userId), isApproved: true } },
+      { $match: { reviewee: mongoose.Types.ObjectId(req.params.userId), isApproved: true } },
       {
         $group: {
           _id: null,

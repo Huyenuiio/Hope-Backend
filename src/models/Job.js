@@ -44,7 +44,7 @@ const JobSchema = new mongoose.Schema(
     yearsOfExperienceRequired: { type: Number, default: 0 },
     status: {
       type: String,
-      enum: ['pending', 'approved', 'rejected', 'open', 'in-progress', 'completed', 'cancelled'],
+      enum: ['pending', 'approved', 'rejected', 'open', 'in-progress', 'completed', 'cancelled', 'closed'],
       default: 'pending',
     },
     client: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },

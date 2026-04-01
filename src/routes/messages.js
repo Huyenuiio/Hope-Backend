@@ -11,7 +11,7 @@ const checkBidirectionalBlock = async (userId1, userId2) => {
   if (!userId1 || !userId2) return false;
   const user1 = await User.findById(userId1).select('blockedUsers');
   const user2 = await User.findById(userId2).select('blockedUsers');
-  
+
   const id1Str = userId1.toString();
   const id2Str = userId2.toString();
 
@@ -138,7 +138,7 @@ router.get('/:userId', async (req, res) => {
 
     const currentUser = await User.findById(req.user._id).select('blockedUsers');
     const targetUser = await User.findById(req.params.userId).select('blockedUsers');
-    
+
     const reqUserIdStr = req.user._id.toString();
     const targetUserIdStr = req.params.userId.toString();
 
@@ -207,22 +207,30 @@ router.post('/', async (req, res) => {
       { path: 'receiver', select: 'name avatar' },
     ]);
 
-    // Create notification (Database)
-    const newNotif = await Notification.create({
-      recipient: receiverId,
-      sender: req.user._id,
-      type: 'new_message',
-      title: 'Tin nhắn mới',
-      message: `${req.user.name}: ${content.substring(0, 50)}${content.length > 50 ? '...' : ''}`,
-      link: `/messages?with=${req.user._id}`,
-    });
-
     // Real-time broadcast via Socket.IO
     const io = req.app.get('io');
+    let isOnline = false;
     if (io && io.sendMessageToUser) {
+      // Check if user is online via io.getOnlineUsers if available
+      const onlineUsers = io.getOnlineUsers ? io.getOnlineUsers() : [];
+      isOnline = onlineUsers.includes(receiverId.toString());
+
       io.sendMessageToUser(receiverId, message);
-      if (io.pushNotificationToUser) {
-         io.pushNotificationToUser(receiverId, newNotif);
+    }
+
+    // Create notification only if receiver is OFFLINE
+    if (!isOnline) {
+      const newNotif = await Notification.create({
+        recipient: receiverId,
+        sender: req.user._id,
+        type: 'new_message',
+        title: 'Tin nhắn mới',
+        message: `${req.user.name}: ${content.substring(0, 50)}${content.length > 50 ? '...' : ''}`,
+        link: `/messages?with=${req.user._id}`,
+      });
+
+      if (io && io.pushNotificationToUser) {
+        io.pushNotificationToUser(receiverId, newNotif);
       }
     }
 
