@@ -70,9 +70,8 @@ router.get('/', optionalAuth, cacheMiddleware(300, 'jobs:feed'), async (req, res
         const appliedJobIds = applications.map(a => a.job);
         query._id = { ...query._id, $in: appliedJobIds };
       }
-      if (savedOnly === 'true') {
-        const user = await User.findById(req.user._id).select('savedJobs');
-        query._id = { ...query._id, $in: user.savedJobs || [] };
+      if (String(savedOnly) === 'true') {
+        query._id = { ...query._id, $in: req.user.savedJobs || [] };
       }
     }
     if (search) {
@@ -115,10 +114,9 @@ router.get('/', optionalAuth, cacheMiddleware(300, 'jobs:feed'), async (req, res
     // Enhance jobs with user-specific data (hasApplied, isSaved) and filter comments
     let enhancedJobs = enhancedJobsWithCounts;
     if (req.user) {
-      const fullUser = await User.findById(req.user._id).select('savedJobs');
       const appliedJobs = await Application.find({ freelancer: req.user._id }).select('job');
       const appliedJobIds = appliedJobs.map(a => a.job.toString());
-      const savedJobIds = (fullUser?.savedJobs || []).map(id => id.toString());
+      const savedJobIds = (req.user.savedJobs || []).map(id => id.toString());
 
       enhancedJobs = enhancedJobs.map(job => {
         // Add block flag to comments and replies from restricted users
@@ -341,7 +339,14 @@ router.get('/:id', optionalAuth, async (req, res) => {
       jobData.client.postedJobsCount = clientJobCount;
     }
 
-    res.json({ success: true, job: jobData, hasApplied, isSaved });
+    res.json({
+      success: true,
+      job: {
+        ...jobData,
+        hasApplied,
+        isSaved
+      }
+    });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }

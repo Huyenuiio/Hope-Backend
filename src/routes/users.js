@@ -347,12 +347,13 @@ router.delete('/connect/:id', protect, async (req, res) => {
 
 // @route   POST /api/users/saved-jobs/:jobId
 // @desc    Toggle saving/unsaving a job
-router.post('/saved-jobs/:jobId', protect, authorize('freelancer'), async (req, res) => {
+router.post('/saved-jobs/:jobId', protect, authorize('freelancer', 'client'), async (req, res) => {
   try {
     const user = await User.findById(req.user._id);
     const jobId = req.params.jobId;
 
-    const isSaved = user.savedJobs.includes(jobId);
+    // Use string comparison for reliability with ObjectIds
+    const isSaved = (user.savedJobs || []).some(id => id.toString() === jobId);
 
     if (isSaved) {
       user.savedJobs.pull(jobId);
@@ -361,6 +362,10 @@ router.post('/saved-jobs/:jobId', protect, authorize('freelancer'), async (req, 
     }
 
     await user.save();
+
+    // Invalidate jobs feed cache for this user
+    await clearCachePattern(`cache:jobs:feed:${req.user._id}:*`);
+
     res.json({ success: true, isSaved: !isSaved, message: isSaved ? 'Đã bỏ lưu công việc' : 'Đã lưu công việc' });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });

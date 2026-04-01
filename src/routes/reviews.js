@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const Review = require('../models/Review');
 const User = require('../models/User');
+const mongoose = require('mongoose');
 const Job = require('../models/Job');
 const Notification = require('../models/Notification');
 const { protect, optionalAuth } = require('../middleware/auth');
