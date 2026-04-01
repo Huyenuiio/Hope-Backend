@@ -47,8 +47,6 @@ module.exports = (httpServer) => {
     const userId = socket.user._id.toString();
     onlineUsers.set(userId, socket.id);
 
-    onlineUsers.set(userId, socket.id);
-
     // Broadcast online status to others
     socket.broadcast.emit('user:online', { userId, name: socket.user.name });
 
