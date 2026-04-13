@@ -316,7 +316,6 @@ router.post('/:id/connect', protect, authorize('freelancer', 'client'), async (r
 // @desc    Accept or reject connection request
 router.post('/connect/:senderId/respond', protect, authorize('freelancer', 'client'), async (req, res) => {
   const { action } = req.body; // 'accept' or 'reject'
-  console.log(`[DEBUG CONNECT] Respond called for senderId: "${req.params.senderId}", action: "${action}", by userId: "${req.user._id}"`);
   
   try {
     const userId = req.user._id;
@@ -325,38 +324,24 @@ router.post('/connect/:senderId/respond', protect, authorize('freelancer', 'clie
     // 1. Find the user and all pending requests from this sender
     const user = await User.findById(userId);
     if (!user) {
-      console.log(`[DEBUG CONNECT] User ${userId} not found`);
       return res.status(404).json({ success: false, message: 'Không tìm thấy người dùng hiện tại' });
     }
 
-    console.log(`[DEBUG CONNECT] User found. has ${user.connectionRequests?.length || 0} total requests.`);
-    if (user.connectionRequests && user.connectionRequests.length > 0) {
-      console.log(`[DEBUG CONNECT] First request from: ${user.connectionRequests[0].from}, status: ${user.connectionRequests[0].status}`);
-    }
-
     const requests = user.connectionRequests.filter(r => {
-      const isMatch = r.from && r.from.toString() === senderId;
-      const isPending = r.status === 'pending';
-      console.log(`[DEBUG CONNECT] Checking request from ${r.from}. isMatch: ${isMatch}, isPending: ${isPending}`);
-      return isMatch && isPending;
+      return r.from && r.from.toString() === senderId && r.status === 'pending';
     });
 
-    console.log(`[DEBUG CONNECT] Found ${requests.length} pending requests from sender ${senderId}`);
-
     if (requests.length === 0) {
-      console.log(`[DEBUG CONNECT] Returning 404 because no pending request found.`);
       return res.status(404).json({ success: false, message: 'Không tìm thấy yêu cầu hoặc đã được xử lý' });
     }
 
     // 2. Perform connection logic if accepted
     if (action === 'accept') {
-      // Use addToSet to avoid duplicates in both directions
       await User.updateOne({ _id: userId }, { $addToSet: { connections: senderId } });
       await User.updateOne({ _id: senderId }, { $addToSet: { connections: userId } });
-      console.log('[DEBUG CONNECT] Connections updated with $addToSet');
     }
 
-    // 3. Mark ALL pending requests from this sender as processed in the array
+    // 3. Mark ALL pending requests from this sender as processed
     await User.updateOne(
       { _id: userId },
       { 
@@ -369,7 +354,6 @@ router.post('/connect/:senderId/respond', protect, authorize('freelancer', 'clie
         multi: true 
       }
     );
-    console.log('Connection requests status updated via arrayFilters');
 
     // 4. Mark all related Notifications as read and handled
     const Notification = require('../models/Notification');
@@ -386,7 +370,6 @@ router.post('/connect/:senderId/respond', protect, authorize('freelancer', 'clie
         message: action === 'accept' ? 'Bạn đã chấp nhận kết nối' : 'Bạn đã từ chối kết nối'
       }
     );
-    console.log('Stale notifications cleaned up');
 
     // 5. Create new handled notification for the sender
     await Notification.create({
