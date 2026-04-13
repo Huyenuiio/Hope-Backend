@@ -3,9 +3,9 @@ const bcrypt = require('bcryptjs');
 const dotenv = require('dotenv');
 const path = require('path');
 
-dotenv.config({ path: path.join(__dirname, '.env') });
+dotenv.config({ path: path.join(__dirname, '../.env') });
 
-const User = require('./src/models/User');
+const User = require('../src/models/User');
 
 const seedUser = async () => {
   try {

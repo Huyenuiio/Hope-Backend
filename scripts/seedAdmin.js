@@ -1,6 +1,6 @@
 const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
-const User = require('./src/models/User');
+const User = require('../src/models/User');
 require('dotenv').config();
 
 const MONGO_URI = process.env.MONGO_URI || 'mongodb://127.0.0.1:27017/linkedin_clone';
