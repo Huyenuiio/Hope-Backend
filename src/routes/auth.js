@@ -90,9 +90,23 @@ router.post('/login', loginLimiter, async (req, res) => {
 // @desc    Get current logged-in user
 router.get('/me', protect, async (req, res) => {
   try {
-    const user = await User.findById(req.user._id)
+    const userDoc = await User.findById(req.user._id)
       .select('-lastLoginIP -loginCount -socialHistory -caseStudies')
       .populate('connections', 'name avatar headline');
+    
+    if (!userDoc) return res.status(404).json({ success: false, message: 'User not found' });
+
+    const user = userDoc.toObject();
+
+    // Dynamically calculate which users this user has sent a pending connection request to
+    const sentRequestsDocs = await User.find({
+      'connectionRequests': { 
+        $elemMatch: { from: req.user._id, status: 'pending' } 
+      }
+    }).select('_id');
+    
+    user.sentRequests = sentRequestsDocs.map(u => u._id);
+
     res.json({ success: true, user });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
